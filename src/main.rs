@@ -2,6 +2,7 @@ use crate::task2022::codingtasks::task1::task_2022_task1;
 use crate::task2022::codingtasks::task2::task_2022_task2;
 
 mod task2022;
+mod util;
 
 
 fn main() {

@@ -17,7 +17,7 @@ pub fn task_2022_task1() {
     let mut count = 0;
 
     count += x / 2i32.pow((n-1) as u32);
-    count += break_down_to_2_powered_numbers(x % 2i32.pow((n-1) as u32), n).iter().filter(|&(_, &consist_or_not)| consist_or_not).count();
+    count += break_down_to_2_powered_numbers(x % 2i32.pow((n-1) as u32), n).iter().filter(|&(_, &consist_or_not)| consist_or_not).count() as i32;
 
     println!("{}", count);
 }

@@ -3,7 +3,6 @@ use std::collections::HashMap;
 // return : key: power of 2, value: whether to consist or not
 pub fn break_down_to_2_powered_numbers(to_split: i32, number_of_2_powered_numbers: i32) -> HashMap<i32, bool> {
     let mut two_powered_numbers_to_consist_or_not: HashMap<i32, bool> = HashMap::new();
-
     // println!("{}", to_split);
     // println!("{}", number_of_2_powered_numbers);
     if 2i32.pow(number_of_2_powered_numbers as u32) <= to_split {

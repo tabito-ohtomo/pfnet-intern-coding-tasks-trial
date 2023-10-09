@@ -1,6 +1,7 @@
-use std::collections::HashMap;
 use std::io;
-use std::iter::Map;
+use std::ops::Deref;
+
+use dyn_partial_eq::{dyn_partial_eq, DynPartialEq};
 use itertools::iproduct;
 
 pub fn task_2022_task3() {
@@ -14,7 +15,7 @@ pub fn task_2022_task3() {
     let columns: i32 = split_rows_and_columns.next().expect("panic!").parse().unwrap();
     println!("rows: {}, columns: {}", rows, columns);
 
-    let mut original_pattern: Pattern = Vec::new();
+    let mut original_pattern: Vec<Vec<Color>> = Vec::new();
     for _ in 0..rows {
         let mut read_color_row = String::new();
         io::stdin().read_line(&mut read_color_row).expect("panic!");
@@ -25,7 +26,7 @@ pub fn task_2022_task3() {
         original_pattern.push(color_row);
     }
 
-    let mut to_be_pattern: Pattern = Vec::new();
+    let mut to_be_pattern: Vec<Vec<Color>> = Vec::new();
     for _ in 0..rows {
         let mut read_color_row = String::new();
         io::stdin().read_line(&mut read_color_row).expect("panic!");
@@ -60,35 +61,62 @@ impl Color {
     }
 }
 
-fn breadth_first_search<NODE>(original: NODE, to_be: NODE) -> i32
-    where NODE : TreeNode + PartialEq + Eq + std::fmt::Debug{
-    let mut queue: Vec<Box<dyn TreeNode>> = Vec::new();
-    let mut already_appeared: Vec<Box<dyn TreeNode>> = Vec::new();
-    queue.push(Box::new(original));
-    let mut depth = 0;
-    while !queue.is_empty() {
-        let mut next_queue: Vec<Box<dyn TreeNode>> = Vec::new();
-        for node in queue {
-            if node == to_be {
-                return depth;
-            }
-            if already_appeared.contains(&node) {
-                continue;
-            } else {
-                next_queue.append(&mut node.get_children());
-                already_appeared.push(node)
-            }
-        }
-        queue = next_queue;
-        depth += 1;
-    }
-    return -1;
+// type Pattern  = Vec<Vec<Color>>;
+
+#[derive(DynPartialEq, PartialEq, Eq, Debug, Clone)]
+struct Pattern {
+    tiles: Vec<Vec<Color>>,
 }
 
-type Pattern  = Vec<Vec<Color>>;
+impl Pattern {
+    fn horizontal_size(&self) -> usize {
+        self.tiles.get(0).map_or(0, |v| v.len())
+    }
 
-trait TreeNode {
-    fn get_children(&self) -> Vec<Box<dyn TreeNode>>;
+    fn vertical_size(&self) -> usize {
+        self.tiles.len()
+    }
+
+    fn get(&self, vertical_index: usize, horizontal_index: usize) -> Color {
+        if vertical_index >= self.vertical_size() || horizontal_index >= self.horizontal_size() {
+            panic!("invalid index")
+        }
+        self.tiles.get(vertical_index).unwrap().get(horizontal_index).unwrap().clone()
+    }
+}
+
+// #[dyn_partial_eq]
+trait TreeNode : PartialEq + Eq + 'static + Clone {
+    fn get_children(&self) -> Vec<Box<Self>>;
+
+
+    fn breadth_first_search_to(self, to_be: Box<Self>) -> i32 {
+        // where NODE: TreeNode + PartialEq + Eq + 'static,
+        //       Box<dyn TreeNode>: PartialEq<Box<NODE>> {
+        let mut queue: Vec<Box<Self>> = Vec::new();
+        let mut already_appeared: Vec<Box<Self>> = Vec::new();
+        queue.push(Box::new(self.clone()));
+        let mut depth = 0;
+        while !queue.is_empty() {
+            let mut next_queue: Vec<Box<Self>> = Vec::new();
+            for node in queue {
+                if node == to_be {
+                    return depth;
+                }
+
+                if already_appeared.contains(&node) {
+                    continue;
+                } else {
+                    next_queue.append(&mut node.get_children());
+                    already_appeared.push(node)
+                }
+            }
+            queue = next_queue;
+            depth += 1;
+        }
+        return -1;
+    }
+
 }
 
 type Range = (usize, usize);
@@ -104,15 +132,15 @@ fn create_ranges(start: usize, end_excluding: usize) -> Vec<Range> {
 }
 
 impl TreeNode for Pattern {
-    fn get_children(&self) -> Vec<Box<dyn TreeNode>> {
-        let mut children: Vec<Box<dyn TreeNode>> = Vec::new();
+    fn get_children(&self) -> Vec<Box<Self>> {
+        let mut children: Vec<Box<Pattern>> = Vec::new();
 
-        let vertical_ranges = create_ranges(0, self.len());
-        let horizontal_ranges = create_ranges(0, self.get(0).len());
+        let vertical_ranges = create_ranges(0, self.vertical_size());
+        let horizontal_ranges = create_ranges(0, self.horizontal_size());
 
         for (vertical, horizontal) in iproduct!(vertical_ranges, horizontal_ranges) {
             // horizontally reversed pattern
-            children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index|  {
+            children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
                 let new_row_index = row_index;
                 let new_column_index = if column_index < horizontal.0 || column_index > horizontal.1 {
                     column_index
@@ -122,7 +150,7 @@ impl TreeNode for Pattern {
                 return (new_row_index, new_column_index);
             })));
             // vertically reversed pattern
-            children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index|  {
+            children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
                 let new_row_index = if row_index < vertical.0 || row_index > vertical.1 {
                     row_index
                 } else {
@@ -134,15 +162,15 @@ impl TreeNode for Pattern {
 
             // square range case
             if vertical.1 - vertical.0 == horizontal.1 - horizontal.0 {
-                children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index|  {
+                children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
                     let new_row_index = vertical.0 + (column_index - horizontal.0);
-                    let new_column_index = horizontal.0 + (row_index - vertical.0);;
+                    let new_column_index = horizontal.0 + (row_index - vertical.0);
                     return (new_row_index, new_column_index);
                 })));
 
-                children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index|  {
+                children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
                     let new_row_index = vertical.1 - (column_index - horizontal.0);
-                    let new_column_index = horizontal.1 - (row_index - vertical.0);;
+                    let new_column_index = horizontal.1 - (row_index - vertical.0);
                     return (new_row_index, new_column_index);
                 })));
             }
@@ -153,29 +181,22 @@ impl TreeNode for Pattern {
 
 fn line_symmetric_reverse<F>(pattern: &Pattern, row_column_index_change_rule: F) -> Pattern
     where F: Fn(usize, usize) -> (usize, usize) {
-
-    let mut new_pattern = Pattern::new();
-    for row_index in 0..pattern.len() {
+    let mut new_pattern = Vec::new();
+    for row_index in 0..pattern.vertical_size() {
         let mut new_row: Vec<Color> = Vec::new();
-        for column_index in 0..pattern.get(0).iter().len() {
+        for column_index in 0..pattern.horizontal_size() {
             let (refer_row_index, refer_column_index) = row_column_index_change_rule(row_index, column_index);
-            new_row.push(pattern.get(refer_row_index).get(refer_column_index))
+            new_row.push(pattern.get(refer_row_index, refer_column_index))
         }
         new_pattern.push(new_row);
     }
-    return new_pattern;
+    return Pattern { tiles: new_pattern };
 }
-
-
-
-
 
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use crate::task2022::codingtasks::task2::{count, create_indexed_bit_set, Item};
-    use crate::task2022::codingtasks::task3::{breadth_first_search, Color, Pattern};
+    use crate::task2022::codingtasks::task3::{Color, Pattern, TreeNode};
 
     // #[test]
     // fn test_0() {
@@ -186,14 +207,16 @@ mod tests {
     //
     #[test]
     fn test_1() {
-        let mut original: Pattern = Vec::new();
+        let mut original: Vec<Vec<Color>> = Vec::new();
         original.push(vec![Color::G, Color::G, Color::B]);
         original.push(vec![Color::R, Color::R, Color::G]);
 
-        let mut tobe: Pattern = Vec::new();
+        let mut tobe: Vec<Vec<Color>> = Vec::new();
         tobe.push(vec![Color::R, Color::B, Color::R]);
         tobe.push(vec![Color::G, Color::G, Color::G]);
 
-        breadth_first_search(original, tobe);
+        let original_pattern = Pattern { tiles: original};
+
+        original_pattern.breadth_first_search_to(Box::new(Pattern { tiles: tobe }));
     }
 }

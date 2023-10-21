@@ -1,9 +1,12 @@
+use std::fmt::Debug;
 use std::io;
 use std::ops::Deref;
 
-use dyn_partial_eq::{dyn_partial_eq, DynPartialEq};
+use dyn_partial_eq::DynPartialEq;
 use itertools::iproduct;
+use tracing::{info, warn};
 
+#[tracing::instrument]
 pub fn task_2022_task3() {
     println!("std in!");
     let mut rows_and_columns = String::new();
@@ -86,10 +89,11 @@ impl Pattern {
 }
 
 // #[dyn_partial_eq]
-trait TreeNode : PartialEq + Eq + 'static + Clone {
+trait TreeNode: PartialEq + Eq + 'static + Clone + Debug {
     fn get_children(&self) -> Vec<Box<Self>>;
 
 
+    #[tracing::instrument]
     fn breadth_first_search_to(self, to_be: Box<Self>) -> i32 {
         // where NODE: TreeNode + PartialEq + Eq + 'static,
         //       Box<dyn TreeNode>: PartialEq<Box<NODE>> {
@@ -116,15 +120,16 @@ trait TreeNode : PartialEq + Eq + 'static + Clone {
         }
         return -1;
     }
-
 }
 
 type Range = (usize, usize);
 
 fn create_ranges(start: usize, end_excluding: usize) -> Vec<Range> {
+    println!("create ranges");
     let mut ranges: Vec<Range> = Vec::new();
     for i in start..end_excluding {
         for j in i..end_excluding {
+            println!("create: {}: {}", i, j);
             ranges.push((i, j));
         }
     }
@@ -132,6 +137,7 @@ fn create_ranges(start: usize, end_excluding: usize) -> Vec<Range> {
 }
 
 impl TreeNode for Pattern {
+    #[tracing::instrument]
     fn get_children(&self) -> Vec<Box<Self>> {
         let mut children: Vec<Box<Pattern>> = Vec::new();
 
@@ -139,6 +145,10 @@ impl TreeNode for Pattern {
         let horizontal_ranges = create_ranges(0, self.horizontal_size());
 
         for (vertical, horizontal) in iproduct!(vertical_ranges, horizontal_ranges) {
+            println!("vertical");
+            println!("{}: {}", vertical.0, vertical.1);
+            println!("horizontal");
+            println!("{}: {}", horizontal.0, horizontal.1);
             // horizontally reversed pattern
             children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
                 let new_row_index = row_index;
@@ -163,24 +173,43 @@ impl TreeNode for Pattern {
             // square range case
             if vertical.1 - vertical.0 == horizontal.1 - horizontal.0 {
                 children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
-                    let new_row_index = vertical.0 + (column_index - horizontal.0);
-                    let new_column_index = horizontal.0 + (row_index - vertical.0);
-                    return (new_row_index, new_column_index);
+                    if row_index < vertical.0 || row_index > vertical.1 || column_index < horizontal.0 || column_index > horizontal.1 {
+                        println!("bbbbbbbbbbbbbbbbbbbbbbbbb");
+                        println!("{}: {}", row_index, column_index);
+                        return (row_index, column_index)
+                    } else {
+                        let new_row_index = vertical.0 + (column_index - horizontal.0);
+                        let new_column_index = horizontal.0 + (row_index - vertical.0);
+                        println!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+                        println!("{}: {}", row_index, column_index);
+                        println!("{}: {}", new_row_index, new_column_index);
+
+                        return (new_row_index, new_column_index);
+                    }
                 })));
 
                 children.push(Box::new(line_symmetric_reverse(self, |row_index, column_index| {
-                    let new_row_index = vertical.1 - (column_index - horizontal.0);
-                    let new_column_index = horizontal.1 - (row_index - vertical.0);
-                    return (new_row_index, new_column_index);
+                    if row_index < vertical.0 || row_index > vertical.1 || column_index < horizontal.0 || column_index > horizontal.1 {
+                        println!("bbbbbbbbbbbbbbbbbbbbbbbbb");
+                        println!("{}: {}", row_index, column_index);
+                        return (row_index, column_index)
+                    } else {
+                        let new_row_index = vertical.1 - (column_index - horizontal.0);
+                        let new_column_index = horizontal.1 - (row_index - vertical.0);
+                        return (new_row_index, new_column_index);
+                    }
                 })));
             }
+        }
+        for child in children.clone() {
+            println!("child: {:?}", child)
         }
         return children;
     }
 }
 
 fn line_symmetric_reverse<F>(pattern: &Pattern, row_column_index_change_rule: F) -> Pattern
-    where F: Fn(usize, usize) -> (usize, usize) {
+    where F: Fn(usize, usize) -> (usize, usize)  {
     let mut new_pattern = Vec::new();
     for row_index in 0..pattern.vertical_size() {
         let mut new_row: Vec<Color> = Vec::new();
@@ -215,8 +244,10 @@ mod tests {
         tobe.push(vec![Color::R, Color::B, Color::R]);
         tobe.push(vec![Color::G, Color::G, Color::G]);
 
-        let original_pattern = Pattern { tiles: original};
+        let original_pattern = Pattern { tiles: original };
 
-        original_pattern.breadth_first_search_to(Box::new(Pattern { tiles: tobe }));
+        let times = original_pattern.breadth_first_search_to(Box::new(Pattern { tiles: tobe }));
+        assert_eq!(times, 2)
+
     }
 }
